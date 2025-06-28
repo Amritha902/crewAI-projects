@@ -17,29 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import time
-def install_dependencies():
-    """Install required dependencies if missing"""
-    import subprocess
-    import sys
-    
-    required_packages = [
-        'crewai',
-        'crewai-tools',
-        'openai',
-        'requests'
-    ]
-    
-    for package in required_packages:
-        try:
-            __import__(package.replace('-', '_'))
-            print(f"[OK] {package} is already installed")
-        except ImportError:
-            print(f"[INSTALL] Installing {package}...")
-            try:
-                subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
-                print(f"[OK] {package} installed successfully")
-            except subprocess.CalledProcessError:
-                print(f"[WARNING] Failed to install {package}, will use mock implementation")
+import chardet  # For encoding detection
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -69,19 +47,85 @@ def setup_logging():
     logger.handlers.clear()
     
     # File handler with UTF-8 encoding
-    file_handler = logging.FileHandler('job_application_system.log', encoding='utf-8')
-    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    try:
+        file_handler = logging.FileHandler('job_application_system.log', encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+    except Exception as e:
+        print(f"Warning: Could not create log file: {e}")
     
     # Console handler with safe formatter
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(SafeFormatter('%(asctime)s - %(levelname)s - %(message)s'))
-    
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+    
     return logger
 
 # Initialize logger
 logger = setup_logging()
+
+
+def safe_read_file(file_path: Path, fallback_encoding: str = 'latin-1') -> str:
+    """Safely read a file with encoding detection and fallback"""
+    try:
+        # First, try to detect encoding
+        with open(file_path, 'rb') as f:
+            raw_data = f.read()
+            
+        # Skip empty files
+        if not raw_data:
+            return ""
+            
+        # Detect encoding
+        try:
+            detected = chardet.detect(raw_data)
+            encoding = detected.get('encoding', 'utf-8') if detected else 'utf-8'
+            confidence = detected.get('confidence', 0) if detected else 0
+            
+            logger.info(f"Detected encoding: {encoding} (confidence: {confidence:.2f}) for {file_path.name}")
+            
+            # If confidence is too low, use UTF-8 as fallback
+            if confidence < 0.7:
+                encoding = 'utf-8'
+                
+        except Exception as e:
+            logger.warning(f"Encoding detection failed for {file_path.name}: {e}")
+            encoding = 'utf-8'
+        
+        # Try to decode with detected/default encoding
+        try:
+            return raw_data.decode(encoding)
+        except UnicodeDecodeError:
+            logger.warning(f"Failed to decode {file_path.name} with {encoding}, trying fallback encodings...")
+            
+            # Try common encodings
+            for enc in ['utf-8', 'latin-1', 'cp1252', 'ascii']:
+                try:
+                    return raw_data.decode(enc)
+                except UnicodeDecodeError:
+                    continue
+            
+            # If all else fails, decode with errors='replace'
+            logger.warning(f"Using error replacement for {file_path.name}")
+            return raw_data.decode('utf-8', errors='replace')
+            
+    except Exception as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        return f"Error reading file: {e}"
+
+
+def safe_write_file(file_path: Path, content: str, encoding: str = 'utf-8') -> bool:
+    """Safely write content to file with proper encoding"""
+    try:
+        # Ensure directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(file_path, 'w', encoding=encoding, errors='replace') as f:
+            f.write(content)
+        return True
+    except Exception as e:
+        logger.error(f"Error writing file {file_path}: {e}")
+        return False
 
 
 class JobApplicationSystem:
@@ -89,10 +133,9 @@ class JobApplicationSystem:
     
     def __init__(self, config: Optional[Dict] = None):
         self.config = config or {}
-        self.logger = setup_logging() if 'logger' not in globals() else logger
         self.setup_environment()
         self.initialize_tools()
-        self.setup_mock_data()  # Add mock data for testing
+        self.setup_mock_data()
         self.setup_agents()
         self.setup_tasks()
         
@@ -217,30 +260,36 @@ AI Fund is a venture capital firm and startup studio focused on artificial intel
         logger.info("🛠️ Initializing tools...")
         
         try:
-            # Try to import CrewAI tools
-            from crewai_tools import SerperDevTool, ScrapeWebsiteTool, FileReadTool
-            
-            # Initialize tools with error handling
-            self.search_tool = MockSearchTool()  # Use mock tool instead
-            self.scrape_tool = MockScrapeTool()  # Use mock tool instead
-            
-            # Create sample resume
+            # Create sample resume first
             self.create_sample_resume()
             
-            # Initialize file tools
-            resume_path = self.output_dir / "sample_resume.md"
-            if resume_path.exists():
-                try:
-                    self.read_resume = FileReadTool(file_path=str(resume_path))
-                except:
-                    self.read_resume = MockFileReadTool(resume_path)
-            else:
-                self.read_resume = None
+            # Try to import CrewAI tools
+            try:
+                from crewai_tools import SerperDevTool, ScrapeWebsiteTool, FileReadTool
                 
-            logger.info("✅ Tools initialized successfully")
-            
-        except ImportError as e:
-            logger.warning(f"⚠️ CrewAI tools import failed: {e}")
+                # Initialize tools with error handling
+                self.search_tool = MockSearchTool()  # Use mock tool for now
+                self.scrape_tool = MockScrapeTool()  # Use mock tool for now
+                
+                # Initialize file tools
+                resume_path = self.output_dir / "sample_resume.md"
+                if resume_path.exists():
+                    try:
+                        self.read_resume = FileReadTool(file_path=str(resume_path))
+                    except Exception as e:
+                        logger.warning(f"FileReadTool failed: {e}, using mock")
+                        self.read_resume = MockFileReadTool(resume_path)
+                else:
+                    self.read_resume = MockFileReadTool(resume_path)
+                    
+                logger.info("✅ Tools initialized successfully")
+                
+            except ImportError as e:
+                logger.warning(f"⚠️ CrewAI tools import failed: {e}")
+                self.setup_mock_tools()
+                
+        except Exception as e:
+            logger.error(f"Error initializing tools: {e}")
             self.setup_mock_tools()
     
     def setup_mock_tools(self):
@@ -319,52 +368,49 @@ Accomplished Software Engineering Leader with 18+ years of experience specializi
 """
         
         resume_path = self.output_dir / "sample_resume.md"
-        with open(resume_path, 'w', encoding='utf-8') as f:
-            f.write(resume_content)
+        success = safe_write_file(resume_path, resume_content)
         
-        logger.info("✅ Sample resume created")
+        if success:
+            logger.info("✅ Sample resume created")
+        else:
+            logger.error("❌ Failed to create sample resume")
     
     def setup_agents(self):
         """Initialize all AI agents with mock capabilities"""
         logger.info("🤖 Setting up AI agents...")
         
         try:
-            from crewai import Agent
-            
-            # Agent 1: Job Market Research Specialist
+            # Use mock agents for reliable testing
             self.job_researcher = MockAgent(
                 role="Job Market Research Specialist",
                 mock_response=self.mock_job_analysis
             )
             
-            # Agent 2: Company Intelligence Analyst
             self.company_analyst = MockAgent(
                 role="Company Intelligence Analyst",
                 mock_response=self.mock_company_research
             )
             
-            # Agent 3: Skills Gap Analyzer
             self.skills_analyzer = MockAgent(
                 role="Skills Gap Analyzer",
                 mock_response=self.mock_skills_analysis
             )
             
-            # Agent 4: Resume Optimizer
             self.resume_optimizer = MockAgent(
                 role="Resume Optimization Expert",
                 mock_response=self.generate_optimized_resume()
             )
             
-            # Agent 5: Cover Letter Writer
             self.cover_letter_writer = MockAgent(
                 role="Cover Letter Specialist",
                 mock_response=self.generate_cover_letter()
             )
             
-            logger.info("✅ Mock agents configured successfully")
+            logger.info("✅ Agents configured successfully")
             
-        except ImportError:
-            logger.info("✅ Using mock agents for testing")
+        except Exception as e:
+            logger.error(f"Error setting up agents: {e}")
+            raise
     
     def generate_optimized_resume(self):
         """Generate optimized resume content"""
@@ -459,8 +505,6 @@ Noah Johnson
     def setup_tasks(self):
         """Setup all tasks for the agents"""
         logger.info("📋 Setting up tasks...")
-        
-        # Tasks are handled by mock agents
         logger.info("✅ Tasks configured successfully")
     
     def run_analysis(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -476,7 +520,7 @@ Noah Johnson
             
             # Simulate analysis process
             logger.info("📊 Running job market analysis...")
-            time.sleep(1)  # Simulate processing time
+            time.sleep(1)
             
             logger.info("🏢 Conducting company research...")
             time.sleep(1)
@@ -494,14 +538,23 @@ Noah Johnson
             result = self.generate_comprehensive_analysis(inputs)
             
             # Save results
-            self.save_results(result, inputs)
+            success = self.save_results(result, inputs)
             
-            logger.info("✅ Analysis completed successfully")
-            return {
-                'status': 'success',
-                'result': result,
-                'output_directory': str(self.output_dir)
-            }
+            if success:
+                logger.info("✅ Analysis completed successfully")
+                return {
+                    'status': 'success',
+                    'result': result,
+                    'output_directory': str(self.output_dir)
+                }
+            else:
+                logger.warning("⚠️ Analysis completed but some files failed to save")
+                return {
+                    'status': 'partial_success',
+                    'result': result,
+                    'output_directory': str(self.output_dir),
+                    'warning': 'Some files failed to save'
+                }
             
         except Exception as e:
             logger.error(f"❌ Error during analysis: {e}")
@@ -577,51 +630,69 @@ Analysis completed for Senior AI Engineer position at AI Fund. Strong candidate 
 **Confidence Score:** 94%
 """
     
-    def save_results(self, result: Any, inputs: Dict[str, Any]):
-        """Save analysis results to files"""
+    def save_results(self, result: Any, inputs: Dict[str, Any]) -> bool:
+        """Save analysis results to files with robust error handling"""
         logger.info("💾 Saving results...")
+        
+        success_count = 0
+        total_files = 4
         
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             # Save main analysis result
             result_file = self.output_dir / f"analysis_result_{timestamp}.md"
-            with open(result_file, 'w', encoding='utf-8') as f:
-                f.write(str(result))
+            if safe_write_file(result_file, str(result)):
+                success_count += 1
+                logger.info(f"✅ Saved analysis result: {result_file.name}")
+            else:
+                logger.error(f"❌ Failed to save analysis result")
             
             # Save optimized resume
             resume_file = self.output_dir / f"optimized_resume_{timestamp}.md"
-            with open(resume_file, 'w', encoding='utf-8') as f:
-                f.write(self.generate_optimized_resume())
+            if safe_write_file(resume_file, self.generate_optimized_resume()):
+                success_count += 1  
+                logger.info(f"✅ Saved optimized resume: {resume_file.name}")
+            else:
+                logger.error(f"❌ Failed to save optimized resume")
             
             # Save cover letter
             cover_letter_file = self.output_dir / f"cover_letter_{timestamp}.md"
-            with open(cover_letter_file, 'w', encoding='utf-8') as f:
-                f.write(self.generate_cover_letter())
+            if safe_write_file(cover_letter_file, self.generate_cover_letter()):
+                success_count += 1
+                logger.info(f"✅ Saved cover letter: {cover_letter_file.name}")
+            else:
+                logger.error(f"❌ Failed to save cover letter")
             
             # Save configuration and metadata
-            metadata_file = self.output_dir / f"metadata_{timestamp}.json"
-            with open(metadata_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'timestamp': datetime.now().isoformat(),
-                    'inputs': inputs,
-                    'system_info': {
-                        'python_version': sys.version,
-                        'output_directory': str(self.output_dir),
-                        'processing_time': timestamp
-                    },
-                    'files_generated': [
-                        str(result_file.name),
-                        str(resume_file.name),
-                        str(cover_letter_file.name)
-                    ]
-                }, f, indent=2)
+            metadata = {
+                'timestamp': datetime.now().isoformat(),
+                'inputs': inputs,
+                'system_info': {
+                    'python_version': sys.version,
+                    'output_directory': str(self.output_dir),
+                    'processing_time': timestamp
+                },
+                'files_generated': [
+                    f"analysis_result_{timestamp}.md",
+                    f"optimized_resume_{timestamp}.md", 
+                    f"cover_letter_{timestamp}.md"
+                ]
+            }
             
-            logger.info(f"✅ Results saved to {self.output_dir}")
-            logger.info(f"📄 Files generated: analysis, resume, cover letter, metadata")
+            metadata_file = self.output_dir / f"metadata_{timestamp}.json"
+            if safe_write_file(metadata_file, json.dumps(metadata, indent=2)):
+                success_count += 1
+                logger.info(f"✅ Saved metadata: {metadata_file.name}")
+            else:
+                logger.error(f"❌ Failed to save metadata")
+            
+            logger.info(f"📊 Successfully saved {success_count}/{total_files} files")
+            return success_count == total_files
             
         except Exception as e:
             logger.error(f"❌ Error saving results: {e}")
+            return False
 
 
 # Mock classes for testing without external dependencies
@@ -643,13 +714,13 @@ class MockScrapeTool:
 
 class MockFileReadTool:
     def __init__(self, file_path):
-        self.file_path = file_path
+        self.file_path = Path(file_path)
     
     def read(self):
         try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except FileNotFoundError:
+            return safe_read_file(self.file_path)
+        except Exception as e:
+            logger.error(f"Error reading file {self.file_path}: {e}")
             return "Sample resume content not found"
 
 
@@ -680,16 +751,25 @@ def main():
         print("📊 ANALYSIS RESULTS")
         print("=" * 60)
         
-        if results['status'] == 'success':
+        if results['status'] in ['success', 'partial_success']:
             print("✅ Analysis completed successfully!")
             print(f"📁 Output directory: {results['output_directory']}")
+            
+            if 'warning' in results:
+                print(f"⚠️ Warning: {results['warning']}")
+            
             print("\n📋 Generated Files:")
             
             # List generated files
             output_dir = Path(results['output_directory'])
+            file_count = 0
             for file_path in output_dir.glob("*"):
-                if file_path.is_file():
+                if file_path.is_file() and not file_path.name.endswith('.log'):
                     print(f"  📄 {file_path.name}")
+                    file_count += 1
+            
+            if file_count == 0:
+                print("  ⚠️ No files found - check permissions and disk space")
             
             print(f"\n📊 Results Summary:")
             print("  ✅ Job analysis completed")
@@ -697,7 +777,11 @@ def main():
             print("  ✅ Skills gap analysis performed")
             print("  ✅ Resume optimized")
             print("  ✅ Cover letter generated")
-            print("  ✅ All files saved successfully")
+            
+            if results['status'] == 'success':
+                print("  ✅ All files saved successfully")
+            else:
+                print("  ⚠️ Some files failed to save - check logs")
             
         else:
             print(f"❌ Analysis failed: {results['error']}")
@@ -711,5 +795,16 @@ def main():
         print(f"❌ System error: {e}")
         print("💡 The system includes fallback mechanisms for robust operation.")
 
+
 if __name__ == "__main__":
+    # Install required packages if not present
+    try:
+        import chardet
+    except ImportError:
+        print("Installing required package: chardet")
+        import subprocess
+        import sys
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "chardet"])
+        import chardet
+    
     main()
