@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-06-28T22:15:48.194915",
+  "inputs": {
+    "job_posting_url": "https://jobs.lever.co/AIFund/6c82e23e-d954-4dd8-a734-c0c2c5ee00f1",
+    "github_url": "https://github.com/joaomdmoura",
+    "personal_writeup": "Noah is an accomplished Software Engineering Leader with 18 years of experience, \n        specializing in managing remote and in-office teams, and expert in multiple programming languages and frameworks. \n        He holds an MBA and a strong background in AI and data science. Noah has successfully led major tech initiatives \n        and startups, proving his ability to drive innovation and growth in the tech industry."
+  },
+  "system_info": {
+    "python_version": "3.13.4 (tags/v3.13.4:8a526ec, Jun  3 2025, 17:46:04) [MSC v.1943 64 bit (AMD64)]",
+    "output_directory": "job_application_output",
+    "processing_time": "20250628_221548"
+  },
+  "files_generated": [
+    "analysis_result_20250628_221548.md",
+    "optimized_resume_20250628_221548.md",
+    "cover_letter_20250628_221548.md"
+  ]
+}

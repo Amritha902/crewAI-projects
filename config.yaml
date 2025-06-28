@@ -1,0 +1,74 @@
+# Enhanced CrewAI Career Assistant Configuration
+project_name: "AI Career Assistant Platform"
+version: "2.0.0"
+description: "Comprehensive multi-agent career management and job application system"
+
+# Agent configurations
+agents:
+  job_market_scanner:
+    model: "gpt-4-turbo"
+    temperature: 0.3
+    max_tokens: 2000
+
+  opportunity_analyst:
+    model: "gpt-4-turbo" 
+    temperature: 0.2
+    max_tokens: 2500
+
+  resume_strategist:
+    model: "gpt-4-turbo"
+    temperature: 0.1
+    max_tokens: 3000
+
+  interview_coach:
+    model: "gpt-4-turbo"
+    temperature: 0.4
+    max_tokens: 2000
+
+# Task configurations  
+tasks:
+  job_discovery:
+    max_iterations: 3
+    timeout_minutes: 30
+
+  application_prep:
+    max_iterations: 2
+    timeout_minutes: 20
+
+  interview_prep:
+    max_iterations: 2
+    timeout_minutes: 15
+
+# Tool configurations
+tools:
+  search_api:
+    provider: "serper"
+    max_results: 50
+
+  scraping:
+    delay_seconds: 1
+    max_retries: 3
+
+  file_management:
+    max_file_size_mb: 10
+    allowed_formats: ["pdf", "docx", "txt", "md", "csv", "json"]
+
+# Output configurations
+outputs:
+  formats: ["markdown", "json", "csv", "pdf"]
+  quality_checks: true
+  backup_enabled: true
+
+# Integration settings
+integrations:
+  linkedin_api:
+    enabled: false
+    rate_limit: 100
+
+  glassdoor_api:
+    enabled: false
+    rate_limit: 50
+
+  indeed_api:
+    enabled: false
+    rate_limit: 200

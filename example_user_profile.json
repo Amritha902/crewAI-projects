@@ -1,0 +1,35 @@
+{
+  "name": "Alex Johnson",
+  "current_role": "Senior Software Engineer",
+  "experience_years": 5,
+  "skills": [
+    "Python",
+    "Machine Learning",
+    "Cloud Computing",
+    "Leadership",
+    "API Development"
+  ],
+  "education": "MS Computer Science",
+  "certifications": [
+    "AWS Certified",
+    "Google Cloud Professional"
+  ],
+  "preferences": {
+    "remote_work": true,
+    "travel_tolerance": "Low",
+    "company_size": "Mid-size to Large",
+    "work_life_balance": "High priority"
+  },
+  "target_roles": [
+    "Senior ML Engineer",
+    "Staff Software Engineer",
+    "Engineering Manager"
+  ],
+  "target_companies": [
+    "Google",
+    "Netflix",
+    "Spotify",
+    "Airbnb"
+  ],
+  "career_goals": "Transition to ML engineering leadership role within 2 years"
+}

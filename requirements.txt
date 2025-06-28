@@ -1,0 +1,40 @@
+# Enhanced AI Career Assistant Platform Requirements
+# Core CrewAI framework
+crewai==0.28.8
+crewai_tools==0.1.6
+langchain_community==0.0.29
+
+# Data processing and analysis
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Web scraping and HTTP requests
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+selenium>=4.0.0
+
+# Configuration and file handling
+pyyaml>=6.0
+python-dateutil>=2.8.0
+pathlib2>=2.3.0
+
+# Text processing and NLP
+textacy>=0.12.0
+spacy>=3.4.0
+
+# API integrations
+openai>=1.0.0
+serper-api>=1.0.0
+
+# Database and storage (optional)
+sqlite3
+
+# Development and testing (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=4.0.0
+
+# Additional utilities
+tqdm>=4.64.0
+rich>=12.0.0
+click>=8.0.0
